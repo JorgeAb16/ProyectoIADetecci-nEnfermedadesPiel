@@ -1,0 +1,1 @@
+# ProyectoIADetecci-nEnfermedadesPiel
