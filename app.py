@@ -94,6 +94,12 @@ TEAL_DEEP = "#0B4A42"
 TEAL_TINT = "#E4F0EC"
 AMBER = "#B5651D"
 AMBER_BG = "#FBEEE3"
+CORAL = "#E15B4C"
+
+# Paleta de acento por rango de diferencial: cada puesto del ranking recibe
+# un color distinto, para que la lista se lea de un vistazo (patrón de
+# leyenda diagnóstica) en vez de una fila monocroma repetida.
+ACENTOS_RANGO = ["#0E6E63", "#C23B5B", "#B5651D", "#5C6BC0", "#2E86AB", "#7C5CBF"]
 
 ESPECTRO = ["#F5DEC6", "#E8C39C", "#D2A379", "#B47F55", "#8C5A3A", "#5A3826"]
 ESPECTRO_CSS = ", ".join(ESPECTRO)
@@ -115,17 +121,98 @@ st.markdown(f"""
     [data-testid="stAppViewContainer"],
     [data-testid="stHeader"],
     [data-testid="stMain"],
-    [data-testid="stBottomBlockContainer"],
-    .block-container {{
+    [data-testid="stBottomBlockContainer"] {{
         background-color: {BG} !important;
         color: {INK} !important;
         font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
     }}
+    /* Textura de puntos sutil (referencia a una hoja de calibración clínica) */
+    [data-testid="stAppViewContainer"] {{
+        background-image: radial-gradient(circle, #D8E6DF 1px, transparent 1px) !important;
+        background-size: 22px 22px !important;
+    }}
+    .block-container {{
+        background-color: transparent !important;
+        color: {INK} !important;
+    }}
     [data-testid="stHeader"] {{ background-color: transparent !important; }}
-    .block-container {{ padding-top: 1.4rem; padding-bottom: 3rem; max-width: 1120px; }}
+    .block-container {{ padding-top: 0 !important; padding-bottom: 3rem; max-width: 1120px; }}
 
     h1, h2, h3 {{ font-family: 'IBM Plex Sans', sans-serif; color: {INK}; }}
     .stMarkdown, .stCaption, label, p, span {{ color: {INK}; }}
+
+    /* ============ HERO A TODO LO ANCHO ============ */
+    /* Técnica de "full bleed": se sale del contenedor centrado de Streamlit */
+    .hero {{
+        position: relative;
+        left: 50%;
+        right: 50%;
+        margin-left: -50vw;
+        margin-right: -50vw;
+        width: 100vw;
+        padding: 3.4rem 1.5rem 3rem 1.5rem;
+        margin-bottom: 2.4rem;
+        background: linear-gradient(115deg, {ESPECTRO_CSS});
+        overflow: hidden;
+    }}
+    .hero::before {{
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(11,74,66,0.15) 0%, rgba(11,74,66,0.78) 78%, {TEAL_DEEP} 100%);
+    }}
+    .hero-inner {{
+        position: relative;
+        z-index: 1;
+        max-width: 1120px;
+        margin: 0 auto;
+        text-align: center;
+    }}
+    .marca {{
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        justify-content: center;
+    }}
+    .marca-titulo {{
+        font-family: 'Fraunces', serif;
+        font-weight: 700;
+        font-size: 3.6rem;
+        color: #FFFFFF;
+        letter-spacing: -0.02em;
+        text-shadow: 0 2px 24px rgba(0,0,0,0.18);
+    }}
+    .marca-badge {{
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: {TEAL_DEEP};
+        background: #FFFFFF;
+        border-radius: 999px;
+        padding: 0.24rem 0.7rem;
+        margin-left: 0.4rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }}
+    .sub-header {{
+        font-size: 1.12rem;
+        color: #E4F3EE;
+        text-align: center;
+        max-width: 640px;
+        margin: 0.7rem auto 0 auto;
+        line-height: 1.6;
+    }}
+
+    .eyebrow {{
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: {TEAL};
+        margin-bottom: 0.5rem;
+    }}
 
     @media (prefers-reduced-motion: reduce) {{
         * {{ animation: none !important; transition: none !important; }}
@@ -196,62 +283,6 @@ st.markdown(f"""
     [data-testid="stSidebar"] [data-testid="stSliderTickBarMin"],
     [data-testid="stSidebar"] [data-testid="stSliderTickBarMax"] {{ color: #A9CAC3 !important; }}
 
-    .calibracion {{
-        display: flex;
-        width: 100%;
-        height: 8px;
-        border-radius: 6px;
-        overflow: hidden;
-        margin-bottom: 2.1rem;
-        background: linear-gradient(90deg, {ESPECTRO_CSS});
-        box-shadow: 0 1px 0 rgba(19,50,45,0.05);
-    }}
-
-    .eyebrow {{
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 0.72rem;
-        font-weight: 600;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: {TEAL};
-        margin-bottom: 0.5rem;
-    }}
-
-    .marca {{
-        display: flex;
-        align-items: center;
-        gap: 0.65rem;
-        justify-content: center;
-    }}
-    .marca-titulo {{
-        font-family: 'Fraunces', serif;
-        font-weight: 600;
-        font-size: 2.9rem;
-        color: {INK};
-        letter-spacing: -0.015em;
-    }}
-    .marca-badge {{
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 0.68rem;
-        font-weight: 600;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: {TEAL_DEEP};
-        background: {TEAL_TINT};
-        border: 1px solid #C6E1D9;
-        border-radius: 999px;
-        padding: 0.22rem 0.65rem;
-        margin-left: 0.35rem;
-    }}
-    .sub-header {{
-        font-size: 1.06rem;
-        color: {INK_SOFT};
-        text-align: center;
-        max-width: 620px;
-        margin: 0.55rem auto 2.2rem auto;
-        line-height: 1.55;
-    }}
-
     .upload-card {{
         background: {SURFACE};
         border: 1px solid {BORDER};
@@ -320,23 +351,25 @@ st.markdown(f"""
     .result-card {{
         background: {SURFACE};
         border-radius: 14px;
-        padding: 0.85rem 1.1rem;
+        padding: 0.85rem 1.1rem 0.85rem 1rem;
         margin: 0.55rem 0;
         border: 1px solid {BORDER};
+        border-left: 5px solid var(--acento, {BORDER});
         display: flex;
         align-items: center;
         gap: 0.95rem;
         box-shadow: 0 1px 2px rgba(19,50,45,0.03);
-        transition: border-color 0.15s ease, transform 0.15s ease;
+        transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
         animation: aparecer 0.35s ease both;
     }}
     .result-card:hover {{
-        border-color: #B7D6CC;
-        transform: translateY(-1px);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px -10px rgba(19,50,45,0.25);
     }}
     .result-card.principal {{
-        border-color: {TEAL};
-        background: linear-gradient(180deg, {TEAL_TINT} 0%, {SURFACE} 65%);
+        border-color: var(--acento, {TEAL});
+        background: linear-gradient(180deg, color-mix(in srgb, var(--acento, {TEAL}) 10%, {SURFACE}) 0%, {SURFACE} 70%);
+        box-shadow: 0 6px 18px -10px rgba(19,50,45,0.3);
     }}
     @keyframes aparecer {{
         from {{ opacity: 0; transform: translateY(4px); }}
@@ -345,23 +378,18 @@ st.markdown(f"""
 
     .rank-badge {{
         flex-shrink: 0;
-        width: 26px;
-        height: 26px;
+        width: 28px;
+        height: 28px;
         border-radius: 50%;
-        border: 1.5px solid {BORDER};
+        border: none;
         display: flex;
         align-items: center;
         justify-content: center;
         font-family: 'IBM Plex Mono', monospace;
         font-size: 0.72rem;
-        font-weight: 600;
-        color: {INK_FAINT};
-        background: {SURFACE_ALT};
-    }}
-    .result-card.principal .rank-badge {{
-        border-color: {TEAL};
-        color: {TEAL_DEEP};
-        background: #FFFFFF;
+        font-weight: 700;
+        color: #FFFFFF;
+        background: var(--acento, {INK_FAINT});
     }}
 
     .disease-name {{
@@ -373,7 +401,8 @@ st.markdown(f"""
     .rank-label {{
         font-family: 'IBM Plex Mono', monospace;
         font-size: 0.7rem;
-        color: {INK_FAINT};
+        font-weight: 700;
+        color: var(--acento, {INK_FAINT});
         letter-spacing: 0.07em;
         margin-bottom: 0.05rem;
     }}
@@ -467,6 +496,13 @@ st.markdown(f"""
         border-radius: 14px !important;
         padding: 0.65rem 0.95rem !important;
     }}
+    [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] {{
+        background: {TEAL} !important;
+        border: none !important;
+    }}
+    [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageContent"] p {{
+        color: #FFFFFF !important;
+    }}
     [data-testid="stChatInput"] {{
         border-radius: 12px !important;
     }}
@@ -530,11 +566,10 @@ def preprocesar_imagen(imagen_pil):
     return arr
 
 
-def render_gauge(prob: float) -> str:
-    """Medidor circular hecho con conic-gradient, usando la misma paleta
-    de la tira de calibración como pista de fondo."""
+def render_gauge(prob: float, color_relleno: str) -> str:
+    """Medidor circular hecho con conic-gradient, coloreado con el acento
+    correspondiente al rango del diferencial."""
     grados = max(4, min(360, round(prob * 360)))
-    color_relleno = TEAL if prob >= CONFIDENCE_THRESHOLD else AMBER
     return (
         f'<div class="gauge" style="background: conic-gradient(from -90deg, '
         f'{color_relleno} {grados}deg, #E2E9E5 {grados}deg 360deg);">'
@@ -543,16 +578,16 @@ def render_gauge(prob: float) -> str:
 
 
 def render_result_card(rank: int, clase: str, prob: float, es_principal: bool) -> str:
-    color_relleno = TEAL if prob >= CONFIDENCE_THRESHOLD else AMBER
+    acento = ACENTOS_RANGO[(rank - 1) % len(ACENTOS_RANGO)]
     clase_card = "result-card principal" if es_principal else "result-card"
     return (
-        f'<div class="{clase_card}">'
-        f'{render_gauge(prob)}'
+        f'<div class="{clase_card}" style="--acento:{acento};">'
+        f'{render_gauge(prob, acento)}'
         f'<div style="flex:1;">'
         f'<div class="rank-label">DIFERENCIAL {rank:02d}</div>'
         f'<div class="disease-name">{nombre_legible(clase)}</div>'
         f'<div class="prob-track"><div class="prob-fill" '
-        f'style="width:{prob * 100:.0f}%; background:{color_relleno};"></div></div>'
+        f'style="width:{prob * 100:.0f}%; background:{acento};"></div></div>'
         f'</div>'
         f'<div class="rank-badge">{rank:02d}</div>'
         f'</div>'
@@ -662,23 +697,20 @@ def render_sidebar(num_clases: int) -> int:
 
 
 def main():
-    st.markdown('<div class="calibracion"></div>', unsafe_allow_html=True)
-
     st.markdown(
+        '<div class="hero"><div class="hero-inner">'
         '<div class="marca">'
-        '<svg width="34" height="34" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">'
-        '<circle cx="15" cy="15" r="10" stroke="#0E6E63" stroke-width="2.5"/>'
-        '<line x1="22.5" y1="22.5" x2="30" y2="30" stroke="#0E6E63" stroke-width="2.5" stroke-linecap="round"/>'
+        '<svg width="38" height="38" viewBox="0 0 34 34" fill="none" xmlns="http://www.w3.org/2000/svg">'
+        '<circle cx="15" cy="15" r="10" stroke="#FFFFFF" stroke-width="2.5"/>'
+        '<line x1="22.5" y1="22.5" x2="30" y2="30" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>'
         '</svg>'
         '<span class="marca-titulo">DermIA Honduras</span>'
         '<span class="marca-badge">Beta</span>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
+        '</div>'
         '<div class="sub-header">Análisis preliminar de afecciones de piel comunes en el contexto '
         'hondureño (clima tropical, alta radiación UV) mediante inteligencia artificial. '
-        'Una herramienta de apoyo, no un reemplazo del criterio médico.</div>',
+        'Una herramienta de apoyo, no un reemplazo del criterio médico.</div>'
+        '</div></div>',
         unsafe_allow_html=True,
     )
 
