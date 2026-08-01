@@ -1,0 +1,7 @@
+streamlit
+tensorflow
+gdown
+numpy
+Pillow
+huggingface_hub
+python-dotenv
