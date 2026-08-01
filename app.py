@@ -505,10 +505,18 @@ st.markdown(f"""
     }}
     [data-testid="stChatInput"] {{
         border-radius: 12px !important;
+        border: 1px solid {BORDER} !important;
+        box-shadow: none !important;
+        transition: border-color 0.15s ease;
+    }}
+    [data-testid="stChatInput"]:focus-within {{
+        border-color: {TEAL} !important;
     }}
     [data-testid="stChatInput"] textarea {{
         background: {SURFACE_ALT} !important;
         color: {INK} !important;
+        outline: none !important;
+        box-shadow: none !important;
     }}
 
     .streamlit-expanderHeader {{
