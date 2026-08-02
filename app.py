@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 
+import cv2
 import gdown
 import numpy as np
 import streamlit as st
@@ -23,6 +24,13 @@ IMG_SIZE = (224, 224)
 # Umbral de confianza experimental (Parte 16 del notebook): por debajo de esto,
 # se recomienda consultar a un dermatólogo en vez de mostrar un diagnóstico especifico.
 CONFIDENCE_THRESHOLD = 0.70
+
+# Umbral de "porcentaje de piel visible" (heurística clásica de color, no el
+# modelo): si una foto tiene muy pocos píxeles con tono de piel, probablemente
+# no es una foto útil para este clasificador (es un objeto, una pantalla, etc).
+# Es un umbral experimental — bájalo si te da demasiados falsos positivos con
+# fotos de piel legítimas (lesiones muy pigmentadas, mala iluminación, etc).
+PIEL_MIN_PORCENTAJE = 0.12
 
 GOOGLE_DRIVE_FILE_ID = "1HEFyoaMg77AMSfihagvEDOkKOKeFFvwb"
 MODEL_PATH = "skin_disease_model.keras"
@@ -462,6 +470,25 @@ st.markdown(f"""
         line-height: 1.55;
     }}
 
+    /* ============ EXPLICACIÓN VISUAL (GRAD-CAM) ============ */
+    .gradcam-frame {{
+        background: {SURFACE};
+        border: 1px solid {BORDER};
+        border-radius: 16px;
+        padding: 0.6rem;
+        box-shadow: 0 1px 2px rgba(19,50,45,0.04);
+    }}
+    .gradcam-frame img {{ border-radius: 10px !important; }}
+    .gradcam-caption {{
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: {INK_SOFT};
+        text-align: center;
+        margin-top: 0.5rem;
+    }}
+
     .chat-card {{
         background: {SURFACE};
         border: 1px solid {BORDER};
@@ -547,6 +574,95 @@ st.markdown(f"""
 
 
 # ----------------------------------------------------------------------
+# FILTRO DE ENTRADA: ¿esto parece piel? (heurística clásica de color,
+# no el modelo — sirve para avisar si suben una foto de otra cosa)
+# ----------------------------------------------------------------------
+def porcentaje_pixeles_piel(imagen_pil) -> float:
+    """Heurística clásica de detección de color de piel en espacio YCrCb.
+    No reemplaza al modelo, solo sirve como filtro rápido de entrada:
+    si casi nada de la imagen tiene tono de piel, probablemente subieron
+    una foto de otra cosa (un objeto, una pantalla, un paisaje, etc)."""
+    img = imagen_pil.convert("RGB").resize((150, 150))
+    arr = np.array(img)
+    ycrcb = cv2.cvtColor(arr, cv2.COLOR_RGB2YCrCb)
+    y, cr, cb = cv2.split(ycrcb)
+    mascara = (y > 60) & (cr > 135) & (cr < 180) & (cb > 85) & (cb < 135)
+    return float(mascara.mean())
+
+
+# ----------------------------------------------------------------------
+# TEST-TIME AUGMENTATION (misma técnica del notebook de entrenamiento)
+# ----------------------------------------------------------------------
+def predecir_con_tta(modelo, entrada_preprocesada):
+    """Promedia la predicción de la imagen original y su espejo horizontal.
+    El flip se aplica DESPUÉS de preprocess_input, lo cual es válido porque
+    es puramente espacial y no interactúa con el escalado de píxeles."""
+    probs_original = modelo.predict(entrada_preprocesada, verbose=0)
+    entrada_flip = tf.image.flip_left_right(entrada_preprocesada)
+    probs_flip = modelo.predict(entrada_flip, verbose=0)
+    return (probs_original + probs_flip) / 2.0
+
+
+# ----------------------------------------------------------------------
+# GRAD-CAM (misma técnica del notebook de entrenamiento)
+# ----------------------------------------------------------------------
+def obtener_submodelo_base(modelo_completo):
+    """Encuentra el sub-modelo EfficientNetV2S embebido dentro del modelo
+    completo (fue agregado como una sola capa al construir el modelo)."""
+    for layer in modelo_completo.layers:
+        if hasattr(layer, "layers") and len(layer.layers) > 10:
+            return layer
+    raise ValueError("No se encontró el sub-modelo base (EfficientNetV2S) dentro del modelo cargado.")
+
+
+def encontrar_ultima_capa_conv(m):
+    for layer in reversed(m.layers):
+        if isinstance(layer, tf.keras.layers.Conv2D):
+            return layer.name
+    for layer in reversed(m.layers):
+        if hasattr(layer, "layers"):
+            for sub in reversed(layer.layers):
+                if isinstance(sub, tf.keras.layers.Conv2D):
+                    return sub.name
+    raise ValueError("No se encontró una capa convolucional en el modelo base.")
+
+
+def calcular_gradcam(modelo_completo, base_model, ultima_capa_conv, entrada_preprocesada):
+    """Recrea el forward pass del modelo completo en dos partes (base +
+    capas de clasificación) para poder capturar los gradientes de la
+    última capa convolucional respecto a la clase predicha."""
+    grad_model = tf.keras.models.Model(
+        [base_model.input], [base_model.get_layer(ultima_capa_conv).output, base_model.output]
+    )
+    capas_clasificacion = modelo_completo.layers[-5:]  # GAP, Dropout, Dense, Dropout, Dense(softmax)
+
+    with tf.GradientTape() as tape:
+        conv_outputs, base_output = grad_model(entrada_preprocesada)
+        x = base_output
+        for capa in capas_clasificacion:
+            x = capa(x)
+        pred_idx = tf.argmax(x[0])
+        canal_clase = x[:, pred_idx]
+
+    grads = tape.gradient(canal_clase, conv_outputs)
+    pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
+    conv_outputs = conv_outputs[0]
+    heatmap = conv_outputs @ pooled_grads[..., tf.newaxis]
+    heatmap = tf.squeeze(heatmap)
+    heatmap = tf.maximum(heatmap, 0) / (tf.math.reduce_max(heatmap) + 1e-8)
+    return heatmap.numpy()
+
+
+def superponer_heatmap(imagen_pil, heatmap, img_size):
+    arr = np.array(imagen_pil.convert("RGB").resize(img_size)).astype("uint8")
+    heatmap_resized = cv2.resize(heatmap, img_size)
+    heatmap_color = cv2.applyColorMap(np.uint8(255 * heatmap_resized), cv2.COLORMAP_JET)
+    heatmap_color = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
+    superpuesta = cv2.addWeighted(arr, 0.55, heatmap_color, 0.45, 0)
+    return Image.fromarray(superpuesta)
+
+
+# ----------------------------------------------------------------------
 # DESCARGA Y CARGA DEL MODELO (desde Google Drive)
 # ----------------------------------------------------------------------
 def descargar_modelo_si_hace_falta():
@@ -562,7 +678,17 @@ def cargar_modelo():
     modelo = tf.keras.models.load_model(MODEL_PATH, compile=False)
     with open(CLASS_NAMES_PATH, "r", encoding="utf-8") as f:
         clases = json.load(f)
-    return modelo, clases
+
+    # Grad-CAM es opcional: si la arquitectura cargada no coincide con lo
+    # esperado (base EfficientNetV2S + 5 capas de clasificación), la app
+    # sigue funcionando normal, solo sin la explicación visual.
+    try:
+        base_model = obtener_submodelo_base(modelo)
+        ultima_capa_conv = encontrar_ultima_capa_conv(base_model)
+    except Exception:
+        base_model, ultima_capa_conv = None, None
+
+    return modelo, clases, base_model, ultima_capa_conv
 
 
 def preprocesar_imagen(imagen_pil):
@@ -679,9 +805,10 @@ def render_sidebar(num_clases: int) -> int:
         st.markdown('<div class="sidebar-section-title">Cómo funciona</div>', unsafe_allow_html=True)
         st.markdown(
             '<div class="sidebar-step"><b>1.</b> Sube una foto nítida de la lesión.</div>'
-            '<div class="sidebar-step"><b>2.</b> El modelo (EfficientNetV2S) la analiza en segundos.</div>'
-            '<div class="sidebar-step"><b>3.</b> Revisa los diagnósticos diferenciales más probables.</div>'
-            '<div class="sidebar-step"><b>4.</b> Pregúntale al asistente lo que quieras saber sobre el resultado.</div>',
+            '<div class="sidebar-step"><b>2.</b> Se verifica que la imagen tenga piel visible.</div>'
+            '<div class="sidebar-step"><b>3.</b> El modelo (EfficientNetV2S) la analiza en segundos.</div>'
+            '<div class="sidebar-step"><b>4.</b> Revisa los diagnósticos diferenciales y el mapa de calor Grad-CAM.</div>'
+            '<div class="sidebar-step"><b>5.</b> Pregúntale al asistente lo que quieras saber sobre el resultado.</div>',
             unsafe_allow_html=True,
         )
 
@@ -723,7 +850,7 @@ def main():
     )
 
     try:
-        modelo, class_names = cargar_modelo()
+        modelo, class_names, base_model, ultima_capa_conv = cargar_modelo()
     except Exception as e:
         st.error(
             "No se pudo descargar o cargar el modelo desde Google Drive. "
@@ -759,9 +886,19 @@ def main():
             st.image(imagen, caption="Imagen cargada", use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
+        pct_piel = porcentaje_pixeles_piel(imagen)
+        if pct_piel < PIEL_MIN_PORCENTAJE:
+            st.markdown(
+                f'<div class="triage">🔍 <strong>Esta imagen tiene muy poco tono de piel visible '
+                f'({pct_piel:.0%}).</strong> Este clasificador está entrenado solo para fotos de '
+                f'lesiones cutáneas — si subiste otra cosa (un objeto, una pantalla, etc.), el '
+                f'resultado no va a ser confiable. Verifica la foto antes de continuar.</div>',
+                unsafe_allow_html=True,
+            )
+
         with st.spinner("Analizando imagen..."):
             entrada = preprocesar_imagen(imagen)
-            predicciones = modelo.predict(entrada, verbose=0)[0]
+            predicciones = predecir_con_tta(modelo, entrada)[0]
 
         top_idx = np.argsort(predicciones)[-top_k:][::-1]
         confianza_principal = float(predicciones[top_idx[0]])
@@ -785,6 +922,33 @@ def main():
                     render_result_card(i + 1, clase, prob, es_principal=(i == 0)),
                     unsafe_allow_html=True,
                 )
+
+        if base_model is not None:
+            st.markdown(
+                '<div class="eyebrow" style="margin-top:1.8rem;">Explicación visual (Grad-CAM)</div>',
+                unsafe_allow_html=True,
+            )
+            try:
+                with st.spinner("Generando mapa de calor..."):
+                    heatmap = calcular_gradcam(modelo, base_model, ultima_capa_conv, entrada)
+                    superpuesta = superponer_heatmap(imagen, heatmap, IMG_SIZE)
+
+                col_g1, col_g2 = st.columns(2, gap="medium")
+                with col_g1:
+                    st.markdown('<div class="gradcam-frame">', unsafe_allow_html=True)
+                    st.image(imagen.convert("RGB").resize(IMG_SIZE), use_container_width=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="gradcam-caption">IMAGEN ORIGINAL</div>', unsafe_allow_html=True)
+                with col_g2:
+                    st.markdown('<div class="gradcam-frame">', unsafe_allow_html=True)
+                    st.image(superpuesta, use_container_width=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        '<div class="gradcam-caption">ZONAS QUE MÁS INFLUYERON EN LA PREDICCIÓN</div>',
+                        unsafe_allow_html=True,
+                    )
+            except Exception:
+                st.caption("No se pudo generar la explicación visual para esta imagen.")
 
         st.markdown(
             '<div class="disclaimer">Este resultado es generado por un modelo de inteligencia '
