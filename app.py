@@ -19,7 +19,7 @@ load_dotenv()
 # ----------------------------------------------------------------------
 # CONFIGURACIÓN DEL MODELO
 # ----------------------------------------------------------------------
-IMG_SIZE = (224, 224)
+IMG_SIZE = (300, 300)
 
 # Umbral de confianza experimental (Parte 16 del notebook): por debajo de esto,
 # se recomienda consultar a un dermatólogo en vez de mostrar un diagnóstico especifico.
