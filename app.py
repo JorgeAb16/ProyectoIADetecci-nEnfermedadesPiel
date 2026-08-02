@@ -32,7 +32,7 @@ CONFIDENCE_THRESHOLD = 0.70
 # fotos de piel legítimas (lesiones muy pigmentadas, mala iluminación, etc).
 PIEL_MIN_PORCENTAJE = 0.12
 
-GOOGLE_DRIVE_FILE_ID = "1f3AUvuNVgwRcK9FZ1ezLGn9rHx9LL1Rc"
+GOOGLE_DRIVE_FILE_ID = "1HEFyoaMg77AMSfihagvEDOkKOKeFFvwb"
 MODEL_PATH = "skin_disease_model.keras"
 CLASS_NAMES_PATH = "clases.json"
 
