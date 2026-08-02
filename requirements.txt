@@ -4,3 +4,5 @@ pillow
 numpy
 gdown
 opencv-python-headless
+huggingface_hub
+python-dotenv
